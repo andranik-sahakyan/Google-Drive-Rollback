@@ -35,7 +35,12 @@ def download_file(file, fileName):
     downloader = MediaIoBaseDownload(fh, file)
     done = False
     while not done:
-        status, done = downloader.next_chunk(3)
+        try:
+            status, done = downloader.next_chunk(3)
+        except:
+            # use export to handle Google docs
+            print('[!] Error, skipping file')
+            done = True
 
 
 def iterfiles(name=None, is_folder=None, parent=None, order_by='folder,name,createdTime'):
@@ -90,15 +95,19 @@ def find_revision(revisions, targetDate):
             return revision
 
 
+# Renames file back to original filename - Mr.Dec Ransomware
 def decrypt_fileName(fileName):
     index = fileName.find('.[ID]')
-    if index != -1:
-        return fileName[:index] 
+    return fileName[:index] if index != -1 else fileName
 
 
 def main():
-    for path, root, dirs, files in walk():
-        os.makedirs("/mnt/d/" + '/'.join(path), exist_ok=True)
+    rootID = input('[*] Root folder ID: ')
+    outputPath = input('[*] Output path: ')
+    rollbackDate = input('[*] Rollback date (YYYY/MM/DD): ').split('/')
+
+    for path, root, dirs, files in walk(rootID):
+        os.makedirs(outputPath + '/'.join(path), exist_ok=True)
         for file in files:
             print(f"{'/'.join(path)}/{file['name']}")
 
@@ -107,8 +116,8 @@ def main():
                 fileId=file.get('id')
             ).execute().get('revisions')
 
-            # dowlnload latest unencrypted version
-            latestUnencrypted = find_revision(revisions, ['2020', '07', '05'])
+            # download latest unencrypted version
+            latestUnencrypted = find_revision(revisions, rollbackDate)
             if latestUnencrypted:
                 request = service.revisions().get_media(
                     fileId=file.get('id'),
@@ -116,7 +125,7 @@ def main():
                 )
 
                 decryptedFile = decrypt_fileName(file['name'])
-                savePath = f"/mnt/d/{'/'.join(path)}/{decryptedFile}"
+                savePath = f"{outputPath}{'/'.join(path)}/{decryptedFile}"
                 download_file(request, savePath)
 
 
